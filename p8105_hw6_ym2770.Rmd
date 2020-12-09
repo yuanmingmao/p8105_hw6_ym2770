@@ -7,6 +7,7 @@ output: github_document
 ```{r, include=FALSE}
 library(tidyverse)
 library(rvest)
+library(modelr)
 
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 
@@ -99,4 +100,78 @@ model_results_df %>%
 None of the 47 states show significantly higher odds of homicide among Black victims than White victims. Black victims have significantly lower odds of homicide than White victims in many states including Boston, Omaha, Oakland, etc.
 
 ## Problem 2 
+
+```{r}
+birthweight_df = 
+  read.csv("data/birthweight.csv", na = c("", "NA", "Unknown")) %>% 
+  select(bwt,bhead, babysex, blength, fincome, gaweeks, malform, smoken, wtgain)
+
+```
+
+The variables that I put into the regression model are the factors that I think could affect the birthweight, including baby’s sex, baby’s head circumference at birth, baby’s length at birth, family monthly income (in hundreds, rounded), gestational age, average number of cigarettes smoked per day during pregnancy, mother’s weight gain during pregnancy.
+
+Plot of model residuals against fitted values 
+
+```{r}
+lm_1 = lm(bwt ~ babysex + bhead + blength + fincome + gaweeks + smoken + wtgain, data = birthweight_df)
+
+birthweight_df %>% 
+  add_predictions(lm_1) %>%
+  add_residuals(lm_1) %>% 
+  ggplot(aes(x = pred, y = resid)) +
+  geom_point(alpha = .3)
+```
+
+Compare the model with the other two using cross-validation
+
+```{r}
+cv_df = 
+  crossv_mc(birthweight_df, 100) %>% 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+cv_df = 
+  cv_df %>% 
+  mutate(
+    mod_1 = map(.x = train, ~lm(bwt ~ babysex + bhead + blength + fincome + gaweeks + smoken + wtgain, data = .x)),
+    mod_2 = map(.x = train, ~ lm(bwt ~ blength + gaweeks, data = .x)),
+    mod_3 = map(.x = train, ~lm(bwt ~ bhead * blength * babysex, data = .x))
+  ) %>% 
+  mutate(
+    rmse_mod_1 = map2_dbl(.x = mod_1, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_mod_2 = map2_dbl(.x = mod_2, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_mod_3 = map2_dbl(.x = mod_3, .y = test, ~rmse(model = .x, data = .y))
+  )
+
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()
+
+```
+
+Compute rmse means for each model:
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>% 
+  pivot_longer(
+    everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) %>% 
+  group_by(model) %>% 
+  summarize(avg_rmse = mean(rmse))
+```
+
+Conclusion: The model I built has the smallest rmse compared with the other two and thus can predict birthweight better.
 
