@@ -95,7 +95,10 @@ model_results_df %>%
   ggplot(aes(x = city_state, y = OR)) +
   geom_point() +
   geom_errorbar(aes(ymin = CI_lower, ymax = CI_upper)) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  labs(
+    title = "Estimated ORs and CIs for each city"
+  )
 ```
 
 None of the 47 states show significantly higher odds of homicide among Black victims than White victims. Black victims have significantly lower odds of homicide than White victims in many states including Boston, Omaha, Oakland, etc.
@@ -111,14 +114,14 @@ birthweight_df =
       babysex == 2 ~ "Female"
     )
   ) %>% 
-  select(bwt,bhead, babysex, blength, fincome, gaweeks, malform, smoken, wtgain)
+  select(bwt, bhead, babysex, blength, fincome, gaweeks, smoken, wtgain)
 
 typeof(birthweight_df$babysex)
 ```
 
 The variables that I put into the regression model are the factors that I think could affect the birthweight, including baby’s sex, baby’s head circumference at birth, baby’s length at birth, family monthly income (in hundreds, rounded), gestational age, average number of cigarettes smoked per day during pregnancy, mother’s weight gain during pregnancy.
 
-Plot of model residuals against fitted values 
+* Plot of model residuals against fitted values 
 
 ```{r}
 lm_1 = lm(bwt ~ babysex + bhead + blength + fincome + gaweeks + smoken + wtgain, data = birthweight_df)
@@ -127,10 +130,15 @@ birthweight_df %>%
   add_predictions(lm_1) %>%
   add_residuals(lm_1) %>% 
   ggplot(aes(x = pred, y = resid)) +
-  geom_point(alpha = .3)
+  geom_point(alpha = .3) +
+  labs(
+    title = "Residuals vs. fitted values",
+    x = "fitted value",
+    y = "residual"
+  )
 ```
 
-Compare the model with the other two using cross-validation
+* Compare the model with the other two using cross-validation
 
 ```{r}
 cv_df = 
@@ -162,7 +170,10 @@ cv_df %>%
     names_prefix = "rmse_"
   ) %>% 
   ggplot(aes(x = model, y = rmse)) +
-  geom_violin()
+  geom_violin() +
+  labs(
+    title = "Distribution of RMSE of each model"
+  )
 
 ```
 
@@ -182,7 +193,7 @@ cv_df %>%
   knitr::kable(digits = 3)
 ```
 
-Conclusion: The model I built has the smallest rmse compared with the other two and thus can predict birthweight better.
+Conclusion: The model I built has the smallest rmse compared with the other two and predicts birthweight better.
 
 ## Problem 3
 
@@ -200,7 +211,7 @@ weather_df =
   select(name, id, everything())
 ```
 
-Use 5000 bootstrap samples and produce estimates of the two quantities of interest for each bootstrap sample.
+* Use 5000 bootstrap samples and produce estimates of the two quantities of interest for each bootstrap sample.
 
 ```{r}
 weather_boot_results = 
@@ -230,28 +241,37 @@ weather_boot_results =
   )
 ```
 
-Plot the distribution of the estimates
+* Plot the distribution of the estimates
 
 ```{r}
 r_2_plot = 
   weather_boot_results %>% 
   filter(estimate == "adj.r.squared") %>% 
   ggplot(aes(x = value)) + 
-  geom_density()
+  geom_density() +
+  labs(
+    title = "Distribution of r squared",
+    x = "r squared"
+  )
 
 log_prod_plot = 
   weather_boot_results %>% 
   filter(estimate == "log.term.product") %>% 
   ggplot(aes(x = value)) + 
-  geom_density()
+  geom_density() +
+  labs(
+    title = "Distribution of log of terms product",
+    x = "log of terms product"
+  )
 
 
 r_2_plot / log_prod_plot
 ```
 
-For r 
+For r squared, the distribution is normal, centering at about 1.91.
+For log of terms product, the distribution is also normal, centering at about 7.5.
 
-Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂^2^ and log (β̂ 1*β̂2)
+* Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂^2^ and log (β̂ 1*β̂2)
 
 ```{r}
 
@@ -265,3 +285,4 @@ weather_boot_results %>%
 
 ```
 
+The CI for r squared is (0.894, 0.927), and the CI for log of terms product is (7.153, 7.818).
