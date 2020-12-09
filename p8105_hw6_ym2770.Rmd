@@ -8,6 +8,7 @@ output: github_document
 library(tidyverse)
 library(rvest)
 library(modelr)
+library(patchwork)
 
 theme_set(theme_minimal() + theme(legend.position = "bottom"))
 
@@ -104,8 +105,15 @@ None of the 47 states show significantly higher odds of homicide among Black vic
 ```{r}
 birthweight_df = 
   read.csv("data/birthweight.csv", na = c("", "NA", "Unknown")) %>% 
+  mutate(
+    babysex = case_when(
+      babysex == 1 ~ "Male",
+      babysex == 2 ~ "Female"
+    )
+  ) %>% 
   select(bwt,bhead, babysex, blength, fincome, gaweeks, malform, smoken, wtgain)
 
+typeof(birthweight_df$babysex)
 ```
 
 The variables that I put into the regression model are the factors that I think could affect the birthweight, including baby’s sex, baby’s head circumference at birth, baby’s length at birth, family monthly income (in hundreds, rounded), gestational age, average number of cigarettes smoked per day during pregnancy, mother’s weight gain during pregnancy.
@@ -170,8 +178,90 @@ cv_df %>%
     names_prefix = "rmse_"
   ) %>% 
   group_by(model) %>% 
-  summarize(avg_rmse = mean(rmse))
+  summarize(avg_rmse = mean(rmse)) %>% 
+  knitr::kable(digits = 3)
 ```
 
 Conclusion: The model I built has the smallest rmse compared with the other two and thus can predict birthweight better.
+
+## Problem 3
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+```
+
+Use 5000 bootstrap samples and produce estimates of the two quantities of interest for each bootstrap sample.
+
+```{r}
+weather_boot_results = 
+  weather_df %>% 
+  drop_na(tmin, tmax) %>% 
+  bootstrap(5000, id = "strap_number") %>% 
+  mutate(
+    models = map(.x = strap, ~lm(tmax ~ tmin, data = .x)), 
+    results_est = map(models, broom::tidy),
+    results_r2 = map(models, broom::glance)
+  ) %>% 
+  unnest(results_est) %>% 
+  select(strap_number, term, estimate, results_r2) %>% 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) %>% 
+  mutate(
+    log.term.product = `(Intercept)` * tmin
+  ) %>% 
+  unnest(results_r2) %>% 
+  select(strap_number, adj.r.squared, log.term.product) %>% 
+  pivot_longer(
+    adj.r.squared:log.term.product,
+    names_to = "estimate",
+    values_to = "value"
+  )
+```
+
+Plot the distribution of the estimates
+
+```{r}
+r_2_plot = 
+  weather_boot_results %>% 
+  filter(estimate == "adj.r.squared") %>% 
+  ggplot(aes(x = value)) + 
+  geom_density()
+
+log_prod_plot = 
+  weather_boot_results %>% 
+  filter(estimate == "log.term.product") %>% 
+  ggplot(aes(x = value)) + 
+  geom_density()
+
+
+r_2_plot / log_prod_plot
+```
+
+For r 
+
+Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂^2^ and log (β̂ 1*β̂2)
+
+```{r}
+
+weather_boot_results %>% 
+  group_by(estimate) %>% 
+  summarize(
+    CI_lower = quantile(value, 0.025),
+    CI_upper = quantile(value, 0.975)
+  ) %>% 
+  knitr::kable(digits = 3)
+
+```
 
